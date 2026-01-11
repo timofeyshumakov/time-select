@@ -373,6 +373,21 @@
               <span>Выбрано начало: <strong>{{ formatTime(selectedStartTime) }}</strong>. Кликните на время окончания приема</span>
             </div>
           </v-alert>
+          <v-alert
+            v-if="alertTitle"
+            :type="alertType"
+            variant="tonal"
+            class="mb-4"
+            closable
+            @click:close="showAlert('error', '')"
+          >
+            <template v-slot:title>
+              {{ alertTitle }}
+            </template>
+            <div v-if="alertDescription" class="mt-2">
+              {{ alertDescription }}
+            </div>
+          </v-alert>
         </div>
       </v-card>
     </v-col>
@@ -396,7 +411,12 @@ const timeSlots = ref([])
 const selectedStartTime = ref(null)
 const selectedEndTime = ref(null)
 const hoveredSlot = ref(null)
-
+const selectedClinicRenovatioId = computed(() => {
+  if (!selectedClinic.value) return null
+  
+  const clinic = clinics.value.find(c => c.id == selectedClinic.value)
+  return clinic?.ufCrm9Renovatioid
+})
 watch(selectedStartTime, (newVal) => {
   if (newVal) {
     editableStartTime.value = newVal
@@ -545,11 +565,13 @@ const onDoctorChange = (doctorId) => {
     timeSlots.value = []
   }
 }
-const url = computed(() => 
-  selectedDoctor.value 
-    ? `https://renovoapp.webtm.ru/index.php?action=get_calendar&doctor_id=${selectedDoctor.value}`
-    : null
-)
+const url = computed(() => {
+  if (!selectedDoctor.value) return null
+  
+  const clinicId = selectedClinicRenovatioId.value
+  
+  return `https://renovoapp.webtm.ru/index.php?action=get_calendar&doctor_id=${selectedDoctor.value}&clinic_id=${clinicId}`
+})
 const { data, pending, error, refresh } = await useFetch(
   () => url.value,
   {
@@ -592,7 +614,7 @@ const updateDoctorInfo = () => {
   }
 }
 
-// Моковый вызов API для получения клиник
+// вызов API для получения клиник
 const fetchClinics = async () => {
   loadingClinics.value = true
   try {
@@ -1013,21 +1035,85 @@ const durationInMinutes = computed(() => {
   const durationMs = endSlot.timestamp - startSlot.timestamp
   return Math.round(durationMs / (1000 * 60))
 })
+const alertType = ref('error') // 'error', 'warning', 'info', 'success'
+const alertTitle = ref('')
+const alertDescription = ref('')
+
+const showAlert = (type, title, description = '') => {
+  alertType.value = type
+  alertTitle.value = title
+  alertDescription.value = description
+}
 
 // Подтверждение записи
-const confirmBooking = () => {
-  if (!selectedStartTime.value || !selectedEndTime.value) return
+const confirmBooking = async () => {
+  const bxId = 467575;
+  // Сброс алертов
+  showAlert('error', '')
   
-  const bookingDetails = {
-    date: selectedDate.value,
-    startTime: selectedStartTime.value,
-    endTime: selectedEndTime.value,
-    duration: durationInMinutes.value,
-    doctor: doctorInfo.value
+  // Проверка времени
+  if (!selectedStartTime.value || !selectedEndTime.value) {
+    showAlert('error', 'Не указано время записи', 'Выберите время начала и окончания приема')
+    return
   }
-  
-  alert(`Запись подтверждена!\nДата: ${selectedDateFormatted.value}\nВремя: ${selectedStartTime.value} - ${selectedEndTime.value}\nДлительность: ${durationInMinutes.value} минут`)
-  clearSelection()
+
+  try {
+    const deal = await callApi('crm.deal.get', null, null, bxId);
+    
+    if(!deal.CONTACT_ID){
+      showAlert(
+        'error', 
+        'Не указан контакт в сделке', 
+        'Для записи необходимо связать сделку с контактом пациента'
+      )
+      return;
+    }
+    
+    const contact = await callApi('crm.contact.get', null, null, deal.CONTACT_ID);
+
+    const missingContactFields = []
+    if (!contact.NAME) missingContactFields.push('Имя')
+    if (!contact.LAST_NAME) missingContactFields.push('Фамилия')
+    if (!contact.BIRTHDATE) missingContactFields.push('Дата рождения')
+    
+    if (missingContactFields.length > 0) {
+      showAlert(
+        'error',
+        'Не заполнены данные пациента',
+        `Заполните следующие поля в карточке контакта: ${missingContactFields.join(', ')}`
+      )
+      return;
+    }
+    const response = await fetch(`https://renovoapp.webtm.ru/index.php?action=torenova&bx_id=${bxId}`, {
+      method: 'GET',
+      mode: 'cors', // Явно указываем режим
+      headers: {
+        'Accept': 'application/json',
+      }
+    })
+    
+    // Показать успешный алерт
+    showAlert(
+      'success',
+      'Запись подтверждена!',
+      `Дата: ${selectedDateFormatted.value}\nВремя: ${selectedStartTime.value} - ${selectedEndTime.value}`
+    )
+    
+    // Через 3 секунды скрыть алерт
+    setTimeout(() => {
+      showAlert('success', '')
+    }, 3000)
+    
+    clearSelection()
+    
+  } catch (error) {
+    console.error('Ошибка при подтверждении записи:', error)
+    showAlert(
+      'error',
+      'Ошибка загрузки данных',
+      ''
+    )
+  }
 }
 
 // Заголовок для слота
@@ -1091,8 +1177,9 @@ const fetchDoctorSchedule = async (doctorId) => {
   error.value = null
   
   try {
+    const clinicId = selectedClinicRenovatioId.value;
     // Формируем URL для запроса расписания
-    const url = `https://renovoapp.webtm.ru/index.php?action=get_calendar&doctor_id=${doctorId}`
+    const url = `https://renovoapp.webtm.ru/index.php?action=get_calendar&doctor_id=${doctorId}&clinic_id=${clinicId}`
     
     // Выполняем запрос
     const response = await fetch(url, {

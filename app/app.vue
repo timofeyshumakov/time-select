@@ -397,7 +397,8 @@
 <script setup>
 
 import { ref, computed, onMounted, watch } from 'vue'
-import { callApi } from './callApi'
+import { callApi, callMethod } from './callApi'
+
 // Реактивные переменные
 const selectedClinic = ref(null)
 const selectedDoctor = ref(null)
@@ -539,21 +540,25 @@ const onDateChange = (date) => {
   clearSelection()
   isEditingTime.value = false
 }
+
 const currentDoctorInfo = computed(() => {
   if (!selectedDoctor.value) return null
   
-  const doctor = allDoctors.value.find(d => d.id === selectedDoctor.value)
-  
+  const doctor = allDoctors.value.find(d => d.ufCrm7Renovatioid === selectedDoctor.value)
+
   if (doctor) {
     return {
-      id: doctor.id,
-      name: doctor.title || doctor.name,
+      id: doctor.ufCrm7Renovatioid,
+      bxId: doctor.id,
+      name: doctor.name,
       ufCrm7Profession: doctor.ufCrm7Profession,
+      cabinet: doctor.cabinet
     }
-  }
-  
-  return null
+  } else {
+    return null
+  } 
 })
+
 const onDoctorChange = (doctorId) => {
   selectedDoctor.value = doctorId
   updateDoctorInfo()
@@ -596,22 +601,7 @@ const filteredDoctors = computed(() => {
 
 // Информация о выбранном враче
 const updateDoctorInfo = () => {
-  if (!selectedDoctor.value) {
-    currentDoctorInfo.value = null
-    return
-  }
-  
-  const doctor = allDoctors.value.find(d => d.id === selectedDoctor.value)
-  if (doctor) {
-    currentDoctorInfo.value = {
-      id: doctor.id,
-      name: doctor.name,
-      ufCrm7Profession: doctor.ufCrm7Profession,
-      cabinet: doctor.cabinet
-    }
-  } else {
-    currentDoctorInfo.value = null
-  }
+
 }
 
 // вызов API для получения клиник
@@ -1084,6 +1074,15 @@ const confirmBooking = async () => {
       )
       return;
     }
+    console.log(currentDoctorInfo);
+    const dealUpdateFields = {
+      'UF_CRM_1726973347808': selectedStartTime.value,
+      'UF_CRM_1762178514': selectedEndTime.value,
+      'UF_CRM_1761998673': currentDoctorInfo.value.bxId, //врач
+      'UF_CRM_1762175501': selectedClinic.value, //клиника
+    };
+
+    await callMethod('crm.deal.update', bxId, dealUpdateFields);
     const response = await fetch(`https://renovoapp.webtm.ru/index.php?action=torenova&bx_id=${bxId}`, {
       method: 'GET',
       mode: 'cors', // Явно указываем режим

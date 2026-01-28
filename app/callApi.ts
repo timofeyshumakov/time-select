@@ -252,6 +252,22 @@ export async function callGetMethod(method: string, id: number | string): Promis
     });
 }
 
+export async function callMethod(method: string, id: number | string, fields: Record<string, unknown>, entityTypeId: number | string): Promise<any> {
+    return new Promise((resolve, reject) => {
+        // @ts-ignore
+        BX24.callMethod(method, { id: id, fields: fields, ...(entityTypeId !== undefined ? { entityTypeId } : {}) }, (res: any) => {
+            if (res.error()) {
+                console.error(`Ошибка в методе ${method}:`, res.error());
+                reject(res.error());
+                return;
+            }
+            
+            const data = res.data();
+            resolve(data);
+        });
+    });
+}
+
 // Пример использования нового метода
 export async function getTaskElapsedItems(filter: object = {}, select: string[] = [], taskId: any): Promise<any[]> {
     console.log(filter, select, taskId);

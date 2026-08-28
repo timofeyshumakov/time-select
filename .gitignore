@@ -1,0 +1,36 @@
+# Secrets
+.env
+.env.local
+server/.env
+**/.env
+!.env.example
+!server/.env.example
+
+# PHP
+server/vendor/
+server/.phpunit.cache/
+# Logs / cache / runtime
+**/logs/
+**/cache/
+*.log
+log.json
+bitrix24_log.txt
+server/crest/settings.json
+time-select/crest/settings.json
+
+# Node / Nuxt
+time-select/node_modules/
+time-select/.output/
+time-select/.data/
+time-select/.nuxt/
+time-select/.nitro/
+time-select/.cache/
+time-select/dist/
+node_modules/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.pem
+*.key
